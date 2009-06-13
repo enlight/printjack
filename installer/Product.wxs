@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2009 Vadim Macagon
+   
+  Licensed under the Apache License, Version 2.0 (the "License"); 
+  you may not use this file except in compliance with the License. 
+  You may obtain a copy of the License at 
+  
+  http://www.apache.org/licenses/LICENSE-2.0 
+  
+  Unless required by applicable law or agreed to in writing, software 
+  distributed under the License is distributed on an "AS IS" BASIS, 
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
+  See the License for the specific language governing permissions and 
+  limitations under the License.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+	<Product Id="E3A8A07B-45F1-41CD-8A6F-13C94CAC31D2" 
+           Name="PrintJack" 
+           Language="1033" 
+           Version="0.0.1.0" 
+           Manufacturer="Vadim Macagon" 
+           UpgradeCode="05fbec83-e8af-4f6d-a63d-ee70527576cf">
+    
+    <Package InstallerVersion="300" Compressed="yes" />
+
+    <?if $(var.Platform) = x86 ?>
+      <?define PrintJackServerSource = "..\server\objchk_wxp_x86\i386" ?>
+      <?define PrintJackUISource = "..\ui\objchk_wxp_x86\i386" ?>
+    <?else ?>
+      <?error Error: Target platform not supported! ?>
+    <?endif ?>
+    
+    <!-- Launch conditions that must be true in order for the installer to do anything. -->
+    <Condition Message='Windows 2000 or later required.'>
+      VersionNT >= 500
+    </Condition>
+    <Condition Message="You need to be an administrator to install this product.">
+      Privileged
+    </Condition>
+    
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+    <!-- Specify the information that shows up in the Add/Remove Programs window. -->
+    <Property Id="ARPCOMMENTS">Simple extensible printer port monitor.</Property>
+    <Property Id="ARPURLINFOABOUT">http://printjack.googlecode.com</Property>
+    
+		<Media Id="1" Cabinet="media1.cab" EmbedCab="yes" />
+
+		<Directory Id="TARGETDIR" Name="SourceDir">
+			<Directory Id="SystemFolder">
+				<Component Id="PortMonitorServerComp" Guid="*">
+          <File Id="PortMonitorServer" Name="PrintJackServer.dll" Source="$(var.PrintJackServerSource)\PrintJackServer.dll" DiskId="1" KeyPath="yes" />
+          <RegistryKey Root="HKLM" Key="SYSTEM\CurrentControlSet\Control\Print\Monitors\PrintJack" Action="createAndRemoveOnUninstall">
+            <RegistryValue Name="Driver" Type="string" Value="PrintJackServer.dll" />
+          </RegistryKey>
+          <!-- 
+            Stop the Print Spooler before modifying the disk or registry during 
+            install and uninstall, after modifications are complete start it up 
+            again.
+          -->
+          <ServiceControl Id="SpoolerService" Name="Spooler" Stop="both" Start="both" Wait="yes" />
+        </Component>
+        <Component Id="PortMonitorUIComp" Guid="*">
+          <File Id="PortMonitorUI" Name="PrintJackUI.dll" Source="$(var.PrintJackUISource)\PrintJackUI.dll" DiskId="1" KeyPath="yes" />
+        </Component>
+			</Directory>
+		</Directory>
+    
+		<Feature Id="PortMonitorFeature" Title="Printer Port Monitor" Description="Driver component." Level="1">
+			<ComponentRef Id="PortMonitorServerComp" />
+      <ComponentRef Id="PortMonitorUIComp" />
+		</Feature>
+
+    <UIRef Id="WixUI_Minimal" />
+    
+	</Product>
+</Wix>
