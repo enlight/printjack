@@ -55,6 +55,36 @@ GetMethod(const WCHAR* methodName)
 	return NULL;
 }
 
+bool
+PortExists(const wchar_t* portName)
+{
+	DWORD numBytesNeeded = 0;
+	DWORD numPorts = 0;
+	if (!EnumPorts(NULL, 1, NULL, 0, &numBytesNeeded, &numPorts))
+		if (ERROR_INSUFFICIENT_BUFFER != GetLastError())
+			return true;
+
+	if (0 == numBytesNeeded)
+		return true;
+
+	BYTE* portBuffer = new BYTE[numBytesNeeded];
+	if (portBuffer)
+	{
+		if (EnumPorts(NULL, 1, portBuffer, numBytesNeeded, &numBytesNeeded, &numPorts))
+		{
+			PORT_INFO_1* portInfo = (PORT_INFO_1*)portBuffer;
+			for (DWORD i = 0; i < numPorts; ++i)
+			{
+				if (_wcsicmp(portInfo[i].pName, portName) == 0)
+					return true;
+			}
+		}
+		delete[] portBuffer;
+	}
+
+	return false;
+}
+
 } // anonymous namespace
 
 //-----------------------------------------------------------------------------
@@ -105,21 +135,12 @@ XcvPort::AddPort(BYTE* pInputData, DWORD cbInputData, BYTE* pOutputData,
 	if (((wcslen(portName) + 1) * sizeof(wchar_t)) != cbInputData)
 		return ERROR_INVALID_PARAMETER;
 
-	// fixme: actually check if the port exists!
-	bool bPortExists = false;		
-	//bPortExists = PortExists(NULL, (PWSTR) pInputData, &dwRet);
-
-	if (bPortExists)
-	{
-		SetLastError(ERROR_ALREADY_EXISTS);
+	if (PortExists(portName))
 		return ERROR_ALREADY_EXISTS;
-	}
 	else if (this->monitor->AddPort(portName))
-	{
 		return ERROR_SUCCESS;
-	}
 
-	return GetLastError(); // fixme: hmmm... need some sort of generic error code
+	return GetLastError();
 }
 
 //-----------------------------------------------------------------------------
