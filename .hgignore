@@ -20,3 +20,7 @@ glob:server/vs8/PrintJackServer.suo
 glob:ui/vs8/PrintJackUI.vcproj.*.*.user
 glob:server/vs8/PrintJackServer.vcproj.*.*.user
 glob:config/managed/vs8/PrintJackConfigManaged.vcproj.*.*.user
+glob:api/native/vs8/Debug/*
+glob:api/native/vs8/PrintJackNativeAPI.ncb
+glob:api/native/vs8/PrintJackNativeAPI.suo
+glob:api/native/vs8/PrintJackNativeAPI.vcproj.*.*.user
