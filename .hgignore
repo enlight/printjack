@@ -24,3 +24,6 @@ glob:api/native/vs8/Debug/*
 glob:api/native/vs8/PrintJackNativeAPI.ncb
 glob:api/native/vs8/PrintJackNativeAPI.suo
 glob:api/native/vs8/PrintJackNativeAPI.vcproj.*.*.user
+glob:installer/obj/*
+glob:installer/bin/*
+glob:installer/vs8/PrintJackWix.suo
