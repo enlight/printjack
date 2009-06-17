@@ -150,37 +150,13 @@ TempFileConverter::BuildCommandLine()
 {
 	this->params.Set(L"InputFile", this->tempFilename);
 	std::wstring appArgs = this->config->GetAppArgs(&this->params);
-	// fixme: obtain the app name from the from the app path
-	std::wstring appName = L"gswin32c.exe";
+	// extract the application name from the path
+	std::wstring appName = this->config->GetAppPath();
+	size_t pos = appName.find_last_of(L"\\/");
+	if (std::string::npos != pos)
+		appName.erase(0, pos + 1);
+	
 	return appName + L" " + appArgs;
-
-	/*
-	// suppress startup messages
-	cmdLine += L" -q";
-	// redirect output to file
-	cmdLine += L" -sstdout=D:\\gs_log.txt";
-	// resource paths
-	cmdLine += L" -ID:\\_u\\Ghostscript\\gs8.64\\lib";
-	// disable the interactive prompt
-	cmdLine += L" -dNOPAUSE -dBATCH";
-	cmdLine += L" -dSAFER";
-	// PDF format version
-	cmdLine += L" -dCompatibilityLevel=1.4";
-	// generate a PDF
-	cmdLine += L" -sDEVICE=pdfwrite";
-	// set output file
-	cmdLine += L" -sOutputFile=";
-	cmdLine += this->outputFilename;
-	// PostScript data should be obtained from STDIN
-	//cmdLine += L" -_";
-	// set input file
-	cmdLine += L" -f";
-	cmdLine += this->tempFilename;
-	// quit when finished reading STDIN
-	//cmdLine += L" -c quit";
-		
-	return cmdLine;
-	*/
 }
 
 //-----------------------------------------------------------------------------
@@ -197,7 +173,6 @@ TempFileConverter::CreateChildProcess()
 	ZeroMemory(&startupInfo, sizeof(STARTUPINFO));
 	startupInfo.cb = sizeof(STARTUPINFO); 
 
-	//std::wstring appPath = L"D:\\_u\\Ghostscript\\gs8.64\\bin\\gswin32c.exe";
 	std::wstring cmdLine = this->BuildCommandLine();
 
 	BOOL processCreated = CreateProcess(
