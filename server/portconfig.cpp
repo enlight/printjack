@@ -20,6 +20,41 @@
 
 namespace printjack {
 
+namespace {
+
+void
+AssignStringFromRegistry(std::wstring& result, DWORD valueType, 
+                         BYTE* valueBuffer, DWORD valueBufferSize)
+{
+	if (REG_SZ == valueType)
+	{
+		wchar_t* valueStr = reinterpret_cast<wchar_t*>(valueBuffer);
+		size_t numChars = valueBufferSize / sizeof(wchar_t);
+		if (numChars < 2)
+		{
+			// a valid string will consist of at least 2 chars
+			// (one character and a null-terminator),
+			// anything less should be considered "empty"
+			result.clear();
+		}
+		else if (0 == valueStr[numChars - 1])
+		{
+			// the string is null terminated, 
+			// don't copy the null-terminator because that breaks 
+			// std::wstring concatenation in interesting ways :) 
+			result.assign(valueStr, numChars - 1);
+		}
+		else
+		{
+			// the string is not null terminated,
+			// std::wstring will add the null-terminator
+			result.assign(valueStr, numChars);
+		}
+	}
+}
+
+} // anonymous namespace
+
 //-----------------------------------------------------------------------------
 /**
 	
@@ -41,15 +76,9 @@ PortConfig::AddSetting(const std::wstring& settingName, DWORD settingType,
                        BYTE* settingValue, DWORD settingValueSize)
 {
 	if (L"AppPath" == settingName)
-	{
-		if (REG_SZ == settingType)
-			this->appPath.assign(reinterpret_cast<wchar_t*>(settingValue), (settingValueSize / sizeof(wchar_t)));
-	}
+		AssignStringFromRegistry(this->appPath, settingType, settingValue, settingValueSize);
 	else if (L"AppArgs" == settingName)
-	{
-		if (REG_SZ == settingType)
-			this->appArgs.assign(reinterpret_cast<wchar_t*>(settingValue), (settingValueSize / sizeof(wchar_t)));
-	}
+		AssignStringFromRegistry(this->appArgs, settingType, settingValue, settingValueSize);
 }
 
 //-----------------------------------------------------------------------------
