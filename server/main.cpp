@@ -286,6 +286,7 @@ OperatingSystemIsWin2k()
 */
 extern "C"
 LPMONITOR2
+WINAPI
 InitializePrintMonitor2(PMONITORINIT pMonitorInit, PHANDLE phMonitor)
 {
 	printjack::PortMonitor* monitor = new printjack::PortMonitor(hDllInstance, pMonitorInit);
