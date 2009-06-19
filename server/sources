@@ -68,9 +68,16 @@ PRECOMPILED_INCLUDE=precompiled.h
 PRECOMPILED_CXX=1
 
 #
-# Specify the run-time library to use.
+# Use the multithreaded run-time libraries in a DLL. 
+# In the free build environment, this means msvcrt.lib. 
+# In the checked build environment, this means msvcrtd.lib.
 #
 USE_MSVCRT=1
+
+#
+# Use __cdecl by default.
+#
+#MSC_STDCALL=0
 
 #
 # Need the STL for std::wstring, std::vector etc.
