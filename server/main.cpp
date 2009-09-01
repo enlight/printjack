@@ -19,8 +19,10 @@
 #include "main.tmh"
 #endif
 #include "portmonitor.h"
-#include "port.h"
+#include "portproxy.h"
 #include "xcvport.h"
+
+using namespace printjack;
 
 HINSTANCE hDllInstance;
 const wchar_t* moduleName = L"PrintJackServer";
@@ -61,7 +63,38 @@ EnumPorts(HANDLE hMonitor, LPWSTR pName, DWORD dwLevel, LPBYTE pPorts,
           DWORD cbBuf, LPDWORD pcbNeeded, LPDWORD pcReturned)
 {
 	DoTraceMessage(MSG_INFO, "(dwLevel %lu)", dwLevel);
-	printjack::PortMonitor* monitor = (printjack::PortMonitor*)hMonitor;
+	/*
+	printjack::EnumPortsIpcRequest request(dwLevel, pPorts, cbBuf);
+	
+	printjack::PipeClient pipeClient;
+	
+	if (!pipeClient.Send(&request))
+		return FALSE;
+	
+	printjack::EnumPortsIpcResponse* response = dynamic_cast<printjack::EnumPortsIpcResponse*>(request->GetResponse());
+	
+	DWORD success = response->GetReturnCode();
+	
+	if (pcbNeeded)
+		*pcbNeeded = response->GetNumBytesNeeded();
+	
+	if (success)
+	{
+		// no copy necessary
+		//if (pPorts)
+		//	memcpy_s(pPorts, cbBuf, response->GetPortsData(), response->GetPortsDataSize());
+		if (pcReturned)
+			*pcReturned = response->GetNumPorts();
+	}
+	else
+	{
+		SetLastError(response->GetErrorCode());
+	}
+		
+	return success;
+	*/
+	
+	PortMonitor* monitor = static_cast<PortMonitor*>(hMonitor);
 	if (monitor->EnumPorts(pName, dwLevel, pPorts, cbBuf, pcbNeeded, pcReturned))
 		return TRUE;
 	else
@@ -76,12 +109,32 @@ BOOL
 WINAPI
 OpenPort(HANDLE hMonitor, LPWSTR pName, PHANDLE pHandle)
 {
-	printjack::PortMonitor* monitor = (printjack::PortMonitor*)hMonitor;
 	DoTraceMessage(MSG_INFO, "Opening port (%S)", pName);
+	
+	*pHandle = NULL;
+	
+	PortProxy* proxy = new PortProxy(static_cast<PortMonitor*>(hMonitor), pName);
+	if (!proxy)
+		return FALSE;
+	
+	if (proxy->Open())
+	{
+		*pHandle = proxy;
+		return TRUE;
+	}
+	else
+	{
+		delete proxy;
+		return FALSE;
+	}
+	
+	/*
+	printjack::PortMonitor* monitor = (printjack::PortMonitor*)hMonitor;
 	if (monitor->OpenPort(pName, pHandle))
 		return TRUE;
 	else
 		return FALSE;
+	*/
 }
 
 //-----------------------------------------------------------------------------
@@ -93,6 +146,9 @@ WINAPI
 StartDocPort(HANDLE hPort, LPWSTR pPrinterName, DWORD dwJobId, 
              DWORD dwLevel, LPBYTE pDocInfo)
 {
+	PortProxy* proxy = static_cast<PortProxy*>(hPort);
+	return proxy->StartDoc(pPrinterName, dwJobId, dwLevel, pDocInfo);
+	/*
 	printjack::Port* port = (printjack::Port*)hPort;
 	DoTraceMessage(
 		MSG_INFO, 
@@ -100,6 +156,7 @@ StartDocPort(HANDLE hPort, LPWSTR pPrinterName, DWORD dwJobId,
 		port->GetName().c_str(), pPrinterName, dwJobId
 	);
 	return port->StartDoc(pPrinterName, dwJobId, dwLevel, pDocInfo);
+	*/
 }
 
 //-----------------------------------------------------------------------------
@@ -110,9 +167,13 @@ BOOL
 WINAPI
 WritePort(HANDLE hPort, LPBYTE pBuffer, DWORD cbBuf, LPDWORD pcbWritten)
 {
+	PortProxy* proxy = static_cast<PortProxy*>(hPort);
+	return proxy->Write(pBuffer, cbBuf, pcbWritten);
+	/*
 	printjack::Port* port = (printjack::Port*)hPort;
 	DoTraceMessage(MSG_INFO, "%S", port->GetName().c_str());
 	return port->Write(pBuffer, cbBuf, pcbWritten);
+	*/
 }
 
 //-----------------------------------------------------------------------------
@@ -123,9 +184,13 @@ BOOL
 WINAPI
 ReadPort(HANDLE hPort, LPBYTE pBuffer, DWORD cbBuffer, LPDWORD pcbRead)
 {
+	PortProxy* proxy = static_cast<PortProxy*>(hPort);
+	return proxy->Read(pBuffer, cbBuffer, pcbRead);
+	/*
 	printjack::Port* port = (printjack::Port*)hPort;
 	DoTraceMessage(MSG_INFO, "%S", port->GetName().c_str());
 	return port->Read(pBuffer, cbBuffer, pcbRead);
+	*/
 }
 
 //-----------------------------------------------------------------------------
@@ -136,9 +201,13 @@ BOOL
 WINAPI
 EndDocPort(HANDLE hPort)
 {
+	PortProxy* proxy = static_cast<PortProxy*>(hPort);
+	return proxy->EndDoc();
+	/*
 	printjack::Port* port = (printjack::Port*)hPort;
 	DoTraceMessage(MSG_INFO, "%S", port->GetName().c_str());
 	return port->EndDoc();
+	*/
 }
 
 //-----------------------------------------------------------------------------
@@ -149,10 +218,15 @@ BOOL
 WINAPI
 ClosePort(HANDLE hPort)
 {
+	PortProxy* proxy = static_cast<PortProxy*>(hPort);
+	BOOL returnCode = proxy->Close();
+	delete proxy;
+	/*	
 	printjack::Port* port = (printjack::Port*)hPort;
 	DoTraceMessage(MSG_INFO, "Closing port (%S)", port->GetName().c_str());
 	// nothing to do here... yet
-	return TRUE;
+	*/
+	return returnCode;
 }
 
 //-----------------------------------------------------------------------------
@@ -169,8 +243,8 @@ WINAPI
 XcvOpenPort(HANDLE hMonitor, LPCWSTR pszObject, 
             ACCESS_MASK dwGrantedAccess, PHANDLE phXcv)
 {
-	printjack::PortMonitor* monitor = (printjack::PortMonitor*)hMonitor;
-	printjack::XcvPort* port = new printjack::XcvPort(pszObject, dwGrantedAccess, monitor);
+	PortMonitor* monitor = static_cast<PortMonitor*>(hMonitor);
+	XcvPort* port = new XcvPort(pszObject, dwGrantedAccess, monitor);
 	DoTraceMessage(MSG_INFO, "Opening XcvPort (%S) (Handle %p) (Instance %d)", pszObject, port, port->instanceId);
 	if (port)
 	{
@@ -190,7 +264,7 @@ XcvDataPort(HANDLE hXcv, LPCWSTR pszDataName, PBYTE pInputData,
             DWORD cbInputData, PBYTE pOutputData, DWORD cbOutputData,
             PDWORD pcbOutputNeeded)
 {
-	printjack::XcvPort* port = (printjack::XcvPort*)hXcv;
+	XcvPort* port = static_cast<XcvPort*>(hXcv);
 	DoTraceMessage(
 		MSG_INFO, 
 		"Calling %S on XcvPort (%S) (Handle %p) (Instance %d)", 
@@ -210,7 +284,7 @@ BOOL
 WINAPI 
 XcvClosePort(HANDLE hXcv)
 {
-	printjack::XcvPort* port = (printjack::XcvPort*)hXcv;
+	XcvPort* port = static_cast<printjack::XcvPort*>(hXcv);
 	DoTraceMessage(
 		MSG_INFO, 
 		"Closing XcvPort (%S) (Handle %p) (Instance %d)", 
@@ -229,8 +303,8 @@ void
 WINAPI
 Shutdown(HANDLE hMonitor)
 {
-	printjack::PortMonitor* monitor = (printjack::PortMonitor*)hMonitor;
 	DoTraceMessage(MSG_INFO, "Shutdown");
+	PortMonitor* monitor = static_cast<PortMonitor*>(hMonitor);
 	delete monitor;
 }
 
@@ -295,7 +369,7 @@ InitializePrintMonitor2(PMONITORINIT pMonitorInit, PHANDLE phMonitor)
 	
 	monitor->LoadPorts();
 
-	*phMonitor = static_cast<HANDLE>(monitor);
+	*phMonitor = monitor;
 	
 	// this should allow the monitor to run on Windows 2000 even if it was 
 	// built for Windows XP

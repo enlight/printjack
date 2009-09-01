@@ -52,10 +52,12 @@ public:
 		BYTE* pInputData, DWORD cbInputData, BYTE* pOutputData, 
 		DWORD cbOutputData,	DWORD* pcbOutputNeeded
 	);
+	/*
 	DWORD SetParameter(
 		BYTE* pInputData, DWORD cbInputData, BYTE* pOutputData, 
 		DWORD cbOutputData,	DWORD* pcbOutputNeeded
 	);
+	*/
 	
 	static DWORD CallMethod(
 		XcvPort* port, const wchar_t* methodName, BYTE* pInputData,

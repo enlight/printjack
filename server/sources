@@ -32,7 +32,7 @@ TARGETLIBS=$(SDK_LIB_PATH)\kernel32.lib     \
 #
 # Additional include paths.
 # Boost doesn't work so well with the DDK.
-#INCLUDES=D:\Dev\boost_1_38_0
+INCLUDES=..\3rdparty
 
 #
 # The developer defines the SOURCES macro. It contains a list of all the
@@ -42,13 +42,16 @@ TARGETLIBS=$(SDK_LIB_PATH)\kernel32.lib     \
 #
 SOURCES=main.rc               \
         main.cpp              \
+        ipcprotocol.cpp       \
+        pipeclient.cpp        \
+        portproxy.cpp         \
         portmonitor.cpp       \
-        port.cpp              \
+#        port.cpp              \
         xcvport.cpp           \
-        converter.cpp         \
-        tempfileconverter.cpp \
-        jobparameters.cpp     \
-        portconfig.cpp        \
+#        converter.cpp         \
+#        tempfileconverter.cpp \
+#        jobparameters.cpp     \
+#        portconfig.cpp        \
 
 #
 # Specify options for the compiler using C_DEFINES.

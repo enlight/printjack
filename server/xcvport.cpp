@@ -38,8 +38,8 @@ struct XCV_ENTRY
 XCV_ENTRY xcvMethods[] = {
 	{ L"AddPort", &XcvPort::AddPort },
 	{ L"DeletePort", &XcvPort::DeletePort },
-	{ L"MonitorUI", &XcvPort::MonitorUI },
-	{ L"SetParameter", &XcvPort::SetParameter }
+	{ L"MonitorUI", &XcvPort::MonitorUI }
+	//{ L"SetParameter", &XcvPort::SetParameter }
 };
 
 const int numXcvMethods = sizeof(xcvMethods) / sizeof(xcvMethods[0]);
@@ -210,6 +210,7 @@ XcvPort::MonitorUI(BYTE* pInputData, DWORD cbInputData, BYTE* pOutputData,
 	@param pcbOutputNeeded Not used.
 	@return ERROR_SUCCESS on success, ERROR_INVALID_PARAMETER on failure.
 */
+/*
 DWORD 
 XcvPort::SetParameter(BYTE* pInputData, DWORD cbInputData, 
                       BYTE* pOutputData, DWORD cbOutputData, 
@@ -251,7 +252,7 @@ XcvPort::SetParameter(BYTE* pInputData, DWORD cbInputData,
 	this->monitor->SetJobParameter(jobId, paramName, paramValue);
 	return ERROR_SUCCESS;
 }
-
+*/
 //-----------------------------------------------------------------------------
 /**
 	@brief Maps the given method name to an XcvPort member-function pointer 

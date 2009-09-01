@@ -20,9 +20,6 @@
 
 namespace printjack {
 
-class Port;
-class JobParameters;
-
 //-----------------------------------------------------------------------------
 /**
 	@class PortMonitor
@@ -37,19 +34,24 @@ public:
 	HINSTANCE GetModuleHandle() const;
 	const PortMonitorRegistry* GetRegistry() const;
 	
-	Port* AddPort(const wchar_t* portName);
+	bool AddPort(const wchar_t* portName);
 	bool DeletePort(const wchar_t* portName);
 	void LoadPorts();
 	bool EnumPorts(const wchar_t* serverName, DWORD level, 
 	               BYTE* portsBuffer, DWORD portsBufferSizeInBytes,
 	               DWORD* bytesNeeded, DWORD* numPortsReturned);
-	bool OpenPort(const wchar_t* portName, HANDLE* portHandle);
+	//bool OpenPort(const wchar_t* portName, HANDLE* portHandle);
 	
-	void SetJobParameter(DWORD jobId, const std::wstring& paramName, const std::wstring& paramValue);
-	const JobParameters* GetJobParameters(DWORD jobId);
-	void RemoveJobParameters(DWORD jobId);
+	//void SetJobParameter(DWORD jobId, const std::wstring& paramName, const std::wstring& paramValue);
+	//const JobParameters* GetJobParameters(DWORD jobId);
+	//void RemoveJobParameters(DWORD jobId);
 	
 private:
+	DWORD GetPortInfoSize(const std::wstring& portName, DWORD level) const;
+	static wchar_t* PackStringAt(BYTE** endOfPackedString, const std::wstring& stringToPack);
+	DWORD FillPortInfo(const std::wstring& portName, DWORD level, BYTE* portInfo, BYTE* endOfNextString) const;
+	//BYTE* FillPortInfo1(const std::wstring& portName, PORT_INFO_1* portInfo, BYTE* endOfNextString) const;
+	//BYTE* FillPortInfo2(const std::wstring& portName, PORT_INFO_2* portInfo, BYTE* endOfNextString) const;
 	bool AddPortToRegistry(const wchar_t* portName);
 	bool RemovePortFromRegistry(const wchar_t* portName);
 
@@ -57,8 +59,11 @@ private:
 	PMONITORINIT monitorInit;
 	PortMonitorRegistry registry;
 	CriticalSection criticalSection;
-	std::vector<Port*> ports;
-	std::vector<JobParameters*> parameters;
+	std::vector<std::wstring> portNames;
+	std::wstring monitorName;
+	std::wstring monitorPortDesc;
+	//std::vector<Port*> ports;
+	//std::vector<JobParameters*> parameters;
 };
 
 //-----------------------------------------------------------------------------
