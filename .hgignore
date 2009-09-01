@@ -27,3 +27,9 @@ glob:api/native/vs8/PrintJackNativeAPI.vcproj.*.*.user
 glob:installer/obj/*
 glob:installer/bin/*
 glob:installer/vs8/PrintJackWix.suo
+glob:service/mixed/Debug/*
+glob:service/managed/bin/*
+glob:service/managed/obj/*
+glob:service/mixed/PrintJackServiceMixed.vs8.vcproj.*.*.user
+glob:service/PrintJackService.suo
+glob:service/PrintJackService.ncb

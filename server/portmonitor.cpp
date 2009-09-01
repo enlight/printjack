@@ -15,8 +15,9 @@
 //-----------------------------------------------------------------------------
 #include "precompiled.h"
 #include "portmonitor.h"
-#include "jobparameters.h"
-#include "port.h"
+#include "ipcprotocol.h"
+#include "pipeclient.h"
+#include "loki/ScopeGuard.h"
 
 namespace printjack {
 
@@ -31,7 +32,12 @@ PortMonitor::PortMonitor(HINSTANCE hModule, PMONITORINIT pMonitorInit)
   monitorInit(pMonitorInit),
   registry(pMonitorInit)
 {
-	// empty
+	WCHAR szMonitorName[MAX_PATH + 1];
+	LoadString(hModule, IDS_MONITORNAME, szMonitorName, MAX_PATH);
+	this->monitorName = szMonitorName;
+	WCHAR szPortDesc[MAX_PATH + 1];
+	LoadString(hModule, IDS_PORTDESC, szPortDesc, MAX_PATH);
+	this->monitorPortDesc = szPortDesc;
 }
 
 //-----------------------------------------------------------------------------
@@ -40,6 +46,7 @@ PortMonitor::PortMonitor(HINSTANCE hModule, PMONITORINIT pMonitorInit)
 */
 PortMonitor::~PortMonitor()
 {
+	/*
 	for (size_t i = 0; i < this->ports.size(); ++i)
 	{
 		delete this->ports[i];
@@ -51,41 +58,83 @@ PortMonitor::~PortMonitor()
 		delete this->parameters[i];
 	}
 	this->parameters.clear();
+	*/
 }
 
 //-----------------------------------------------------------------------------
 /**
 	@brief Create a new port and associate it with the monitor.
 	@param portName The name to give the new port.
-	@return A new port instance on success, NULL on failure.
+	@return true on success, false on failure.
 */
-Port* 
+bool
 PortMonitor::AddPort(const wchar_t* portName)
 {
-	std::auto_ptr<Port> port(new Port(portName, this));
 	if (!this->AddPortToRegistry(portName))
-		return NULL;
-	this->ports.push_back(port.get());
-	return port.release();
+		return false;
+		
+	Loki::ScopeGuard registryGuard = Loki::MakeGuard(
+		&PortMonitor::RemovePortFromRegistry, *this, portName
+	);
+	
+	AddPortIpcRequest request(portName);
+
+	PipeClient pipeClient;
+	if (!pipeClient.Send(&request))
+		return false;
+
+	AddPortIpcResponse* response = request.GetExactResponse();
+
+	if (response->GetReturnCode())
+	{
+		registryGuard.Dismiss();
+		this->portNames.push_back(std::wstring(portName));
+		return true;
+	}
+	else
+	{
+		SetLastError(response->GetErrorCode());
+		return false;
+	}
 }
 
 //-----------------------------------------------------------------------------
 /**
 	@brief Delete the port matching the given name.
-	@return true if a port matching the given name was deleted, false otherwise.
+	@return true on success, false on failure.
 */
 bool 
 PortMonitor::DeletePort(const wchar_t* portName)
 {
-	std::vector<Port*>::iterator it;
-	for (it = this->ports.begin(); it != this->ports.end(); ++it)
+	std::vector<std::wstring>::iterator it;
+	for (it = this->portNames.begin(); it != this->portNames.end(); ++it)
 	{
-		if (wcscmp((*it)->GetName().c_str(), portName) == 0)
+		if (wcscmp(it->c_str(), portName) == 0)
 		{
-			this->RemovePortFromRegistry(portName);
-			this->ports.erase(it);
-			delete (*it);
-			return true;
+			if (!this->RemovePortFromRegistry(portName))
+				return false;
+				
+			Loki::ScopeGuard registryGuard = Loki::MakeGuard(&PortMonitor::AddPortToRegistry, *this, portName);
+				
+			DeletePortIpcRequest request(portName);
+
+			PipeClient pipeClient;
+			if (!pipeClient.Send(&request))
+				return false;
+
+			DeletePortIpcResponse* response = request.GetExactResponse();
+
+			if (response->GetReturnCode())
+			{
+				registryGuard.Dismiss();
+				this->portNames.erase(it);
+				return true;
+			}
+			else
+			{
+				SetLastError(response->GetErrorCode());
+				return false;
+			}
 		}
 	}
 	return false;
@@ -146,7 +195,7 @@ PortMonitor::LoadPorts()
 			);
 			
 			if (ERROR_SUCCESS == retval)
-				this->ports.push_back(new Port(portName, this));
+				this->portNames.push_back(std::wstring(portName));
 				
 			portNameSize = maxSubKeyNameLen + 1;
 		}
@@ -202,10 +251,10 @@ PortMonitor::EnumPorts(const wchar_t* serverName, DWORD level,
 	this->criticalSection.Enter();
 	
 	DWORD numBytesNeeded = 0;
-	std::vector<Port *>::const_iterator it;
-	for (it = this->ports.begin(); it != this->ports.end(); ++it)
+	std::vector<std::wstring>::const_iterator it;
+	for (it = this->portNames.begin(); it != this->portNames.end(); ++it)
 	{
-		numBytesNeeded += (*it)->GetPortSize(level);
+		numBytesNeeded += this->GetPortInfoSize((*it), level);
 	}
 	*bytesNeeded = numBytesNeeded;
 	
@@ -215,22 +264,24 @@ PortMonitor::EnumPorts(const wchar_t* serverName, DWORD level,
 	}
 	else
 	{
-		LPBYTE endOfNextString = portsBuffer + portsBufferSizeInBytes;
+		BYTE* endOfNextString = portsBuffer + portsBufferSizeInBytes;
 		*numPortsReturned = 0;
 		
-		for (it = this->ports.begin(); it != this->ports.end(); ++it)
+		for (it = this->portNames.begin(); it != this->portNames.end(); ++it)
 		{
+			portsBuffer += PortMonitor::FillPortInfo((*it), level, portsBuffer, endOfNextString);
+			/*
 			if (1 == level)
 			{
-				endOfNextString = (*it)->FillPortInfo1((PORT_INFO_1 *)portsBuffer, endOfNextString);
+				endOfNextString = PortMonitor::FillPortInfo1((*it), (PORT_INFO_1 *)portsBuffer, endOfNextString);
 				portsBuffer += sizeof(PORT_INFO_1);
 			}
 			else if (2 == level)
 			{
-				endOfNextString = (*it)->FillPortInfo2((PORT_INFO_2 *)portsBuffer, endOfNextString);
+				endOfNextString = PortMonitor::FillPortInfo2((*it), (PORT_INFO_2 *)portsBuffer, endOfNextString);
 				portsBuffer += sizeof(PORT_INFO_2);
 			}
-			
+			*/
 			++(*numPortsReturned);
 		}
 	}
@@ -252,6 +303,7 @@ PortMonitor::EnumPorts(const wchar_t* serverName, DWORD level,
 	@param portHandle Pointer to location that will receive the port handle.
 	@return true on success, false on failure.
 */
+/*
 bool 
 PortMonitor::OpenPort(const wchar_t* portName, HANDLE* portHandle)
 {
@@ -284,11 +336,12 @@ PortMonitor::OpenPort(const wchar_t* portName, HANDLE* portHandle)
 	else
 		return false;
 }
-
+*/
 //-----------------------------------------------------------------------------
 /**
 	
 */
+/*
 void 
 PortMonitor::SetJobParameter(DWORD jobId, const std::wstring& paramName,
                              const std::wstring& paramValue)
@@ -309,11 +362,12 @@ PortMonitor::SetJobParameter(DWORD jobId, const std::wstring& paramName,
 		this->parameters.push_back(jobParams);
 	}
 }
-
+*/
 //-----------------------------------------------------------------------------
 /**
 	
 */
+/*
 const JobParameters* 
 PortMonitor::GetJobParameters(DWORD jobId)
 {
@@ -324,11 +378,12 @@ PortMonitor::GetJobParameters(DWORD jobId)
 	}
 	return NULL;
 }
-
+*/
 //-----------------------------------------------------------------------------
 /**
 	
 */
+/*
 void 
 PortMonitor::RemoveJobParameters(DWORD jobId)
 {
@@ -342,7 +397,137 @@ PortMonitor::RemoveJobParameters(DWORD jobId)
 		}
 	}
 }
+*/
 
+//-----------------------------------------------------------------------------
+/**
+	@brief Get the number of bytes required to store a PORT_INFO_1 or 
+	       PORT_INFO_2 structure and associated strings.
+*/
+DWORD 
+PortMonitor::GetPortInfoSize(const std::wstring& portName, DWORD level) const
+{
+	int numBytes = 0;
+
+	if (1 == level)
+	{
+		numBytes = sizeof(PORT_INFO_1);
+		numBytes += (portName.length() + 1) * sizeof(wchar_t);
+	}
+	else if (2 == level)
+	{
+		numBytes = sizeof(PORT_INFO_2);
+		numBytes += (
+			portName.length() + 1 +
+			this->monitorName.length() + 1 +
+			this->monitorPortDesc.length() + 1
+		) * sizeof(wchar_t);
+	}
+
+	return numBytes;
+}
+
+//-----------------------------------------------------------------------------
+/**
+
+*/
+wchar_t* 
+PortMonitor::PackStringAt(BYTE** endOfPackedString, const std::wstring& stringToPack)
+{
+	if (!stringToPack.empty()) 
+	{
+		size_t stringSize = (stringToPack.length() + 1) * sizeof(wchar_t);
+		wchar_t* startOfPackedString = (wchar_t*)((*endOfPackedString) - stringSize);
+		wcscpy_s(startOfPackedString, stringSize, stringToPack.c_str());
+		// ensure next string will be stored before this one
+		(*endOfPackedString) = (BYTE*)startOfPackedString;
+		return startOfPackedString;
+	} 
+	return NULL;
+}
+
+//-----------------------------------------------------------------------------
+/**
+	
+*/
+DWORD
+PortMonitor::FillPortInfo(const std::wstring& portName, DWORD level, 
+                          BYTE* portInfo, BYTE* endOfNextString) const
+{
+	if (1 == level)
+	{
+		PORT_INFO_1* portInfo1 = reinterpret_cast<PORT_INFO_1*>(portInfo);
+		portInfo1->pName = PortMonitor::PackStringAt(&endOfNextString, portName);
+		return sizeof(PORT_INFO_1);
+	}
+	else if (2 == level)
+	{
+		PORT_INFO_2* portInfo2 = reinterpret_cast<PORT_INFO_2*>(portInfo);
+		portInfo2->pPortName = PortMonitor::PackStringAt(&endOfNextString, portName);
+		portInfo2->pMonitorName = PortMonitor::PackStringAt(&endOfNextString, this->monitorName);
+		portInfo2->pDescription = PortMonitor::PackStringAt(&endOfNextString, this->monitorPortDesc);
+		portInfo2->fPortType = PORT_TYPE_WRITE | PORT_TYPE_READ;
+		portInfo2->Reserved = 0;
+		return sizeof(PORT_INFO_2);
+	}
+	return 0;
+}
+
+//-----------------------------------------------------------------------------
+/**
+	@brief Fills in a PORT_INFO_1 structure.
+	@param PORT_INFO_1
+	
+	The storage for the PORT_INFO_1::pName string is actually allocated at the
+	end of the PORT_INFO_1 structure. So the layout in memory looks something
+	like:
+	----------------------
+	| PORT_INFO_1::pName |
+	----------------------
+	| pName characters   |
+	----------------------
+*/
+/*
+BYTE* 
+PortMonitor::FillPortInfo1(const std::wstring& portName, PORT_INFO_1* portInfo, 
+                           BYTE* endOfNextString) const
+{
+	portInfo->pName = PortMonitor::PackStringAt(&endOfNextString, portName);
+	return endOfNextString;
+}
+*/
+//-----------------------------------------------------------------------------
+/**
+	@brief Fills in a PORT_INFO_2 structure.
+	
+	The storage for the PORT_INFO_2 strings is actually allocated at the
+	end of the PORT_INFO_2 structure. So the layout in memory looks something
+	like:
+	-----------------------------
+	| PORT_INFO_2::pPortName    |
+	| PORT_INFO_2::pMonitorName |
+	| PORT_INFO_2::pDescription |
+	| PORT_INFO_2::fPortType    |
+	| PORT_INFO_2::Reserved     |
+	-----------------------------
+	| pDescription characters   |
+	| pMonitorName characters   |
+	| pPortName characters      |
+	-----------------------------
+*/
+/*
+BYTE* 
+PortMonitor::FillPortInfo2(const std::wstring& portName, PORT_INFO_2* portInfo, 
+                           BYTE* endOfNextString) const
+{
+	portInfo->pPortName = PortMonitor::PackStringAt(&endOfNextString, portName);
+	portInfo->pMonitorName = PortMonitor::PackStringAt(&endOfNextString, this->monitorName);
+	portInfo->pDescription = PortMonitor::PackStringAt(&endOfNextString, this->monitorPortDesc);
+	portInfo->fPortType = PORT_TYPE_WRITE | PORT_TYPE_READ;
+	portInfo->Reserved = 0;
+	return endOfNextString;
+}
+*/
 //-----------------------------------------------------------------------------
 /**
 	@brief Add the given port to the monitor's port list in the registry.
